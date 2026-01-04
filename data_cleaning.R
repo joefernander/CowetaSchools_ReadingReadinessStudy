@@ -8,7 +8,7 @@ read_files <- function(x) {
   readxl::read_xlsx(x) |> 
   janitor::clean_names() |> 
   filter(system_name == 'Coweta County',
-         indicator == 'At or Above Grade-Level Reading') |> 
+         indicator %in% c('At or Above Grade-Level Reading','Literacy')) |> 
   mutate(school_year = as.character(school_year),
          system_id = as.character(system_id))
 }

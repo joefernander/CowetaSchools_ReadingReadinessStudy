@@ -1,0 +1,197 @@
+---
+title: "Reading Readiness"
+format: html
+editor: visual
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r}
+library(tidyverse)
+library(gt)
+library(gtExtras)
+library(ggbump)
+
+df <- read_rds("CCRPI_data.rds")
+
+palette = scico::scico(n = 100, palette = "vik",direction =-1)
+palette_rev = scico::scico(n = 100, palette = "vik",direction = 1)
+
+ranked_df <- df |> 
+  filter(reporting_label == 'ALL Students',
+         school_name != 'All Schools') |> 
+  select(school_year,school_name,grade_cluster,indicator_score) |> 
+  group_by(school_year,grade_cluster) |> 
+  mutate(rank = dense_rank(desc(indicator_score))) |> 
+  arrange(school_year,rank) 
+
+
+avg_ranks <- ranked_df |> 
+  group_by(school_name) |> 
+  summarise(mean_rank = mean(rank), sd_rank = sd(rank,na.rm = TRUE))
+```
+
+```{}
+```
+
+```{r}
+#| column: screen-inset
+
+ranked_df |> 
+  ungroup() |> 
+  filter(grade_cluster == 'E') |> 
+  select(-c(grade_cluster, rank)) |> 
+  mutate(indicator_score = as.numeric(indicator_score),
+         indicator_score = indicator_score / 100) |> 
+  pivot_wider(names_from = school_year, values_from = indicator_score) |> 
+  arrange(school_name) |> 
+  left_join(avg_ranks, by = 'school_name') |> 
+  mutate(
+    change_1yr = `2025` - `2024`,
+    change_3yr = `2025` - `2022`,
+    change_6yr = `2025` - `2019`,
+    covid_gap = `2021` - `2019`
+  ) |> 
+  select(1:8, change_1yr, change_3yr, change_6yr, covid_gap, everything()) |> 
+  arrange(mean_rank) |> 
+  gt() |> 
+  tab_header(
+    title = "Elementary School Performance Analysis"
+  ) |> 
+  tab_spanner(
+    label = md("**Annual Scores**"),
+    columns = 2:8,
+    id = "annual"
+  ) |> 
+  tab_spanner(
+    label = md("**Change Over Time**"),
+    columns = 9:12,
+    id = "change"
+  ) |> 
+  tab_spanner(
+    label = md("**Rankings**"),
+    columns = 13:14,
+    id = "rankings"
+  ) |> 
+  tab_footnote(
+    footnote = "Percentage of students meeting or exceeding standards on state assessments",
+    locations = cells_column_spanners(spanners = "annual")
+  ) |> 
+  tab_footnote(
+    footnote = "Percentage point change from baseline year to 2025. COVID Gap shows change from 2019 to 2021.",
+    locations = cells_column_spanners(spanners = "change")
+  ) |> 
+  tab_footnote(
+    footnote = "Performance change during COVID-19 pandemic (2019 to 2021)",
+    locations = cells_column_labels(columns = covid_gap)
+  ) |> 
+  tab_footnote(
+    footnote = "Average ranking across all years (lower is better)",
+    locations = cells_column_spanners(spanners = "rankings")
+  ) |> 
+  cols_width(
+    1 ~ px(280),
+    2:14 ~ px(90)
+  ) |> 
+  cols_align(columns = 2:14, align = 'center') |> 
+  fmt_percent(2:8) |> 
+  fmt_percent(9:12, decimals = 1, force_sign = TRUE) |> 
+  fmt_number(13:14) |> 
+  data_color(
+    columns = 2:8,
+    palette = palette,
+    domain = c(0, 1)
+  ) |>
+  data_color(
+    columns = mean_rank,
+    palette = palette_rev,
+    domain = c(1, 19)
+  ) |>
+  tab_style(
+    style = cell_fill(color = "#a8c0d3"),
+    locations = cells_body(
+      columns = change_1yr,
+      rows = change_1yr > 0.15
+    )
+  ) |>
+  tab_style(
+    style = cell_fill(color = "#a8c0d3"),
+    locations = cells_body(
+      columns = change_3yr,
+      rows = change_3yr > 0.15
+    )
+  ) |>
+  tab_style(
+    style = cell_fill(color = "#a8c0d3"),
+    locations = cells_body(
+      columns = change_6yr,
+      rows = change_6yr > 0.15
+    )
+  ) |>
+  tab_style(
+    style = cell_fill(color = "#a8c0d3"),
+    locations = cells_body(
+      columns = covid_gap,
+      rows = covid_gap > 0.15
+    )
+  ) |>
+  tab_style(
+    style = cell_fill(color = "lightcoral"),
+    locations = cells_body(
+      columns = change_1yr,
+      rows = change_1yr < -0.15
+    )
+  ) |>
+  tab_style(
+    style = cell_fill(color = "lightcoral"),
+    locations = cells_body(
+      columns = change_3yr,
+      rows = change_3yr < -0.15
+    )
+  ) |>
+  tab_style(
+    style = cell_fill(color = "lightcoral"),
+    locations = cells_body(
+      columns = change_6yr,
+      rows = change_6yr < -0.15
+    )
+  ) |>
+  tab_style(
+    style = cell_fill(color = "lightcoral"),
+    locations = cells_body(
+      columns = covid_gap,
+      rows = covid_gap < -0.15
+    )
+  ) |> 
+  tab_style(
+    style = cell_borders(
+      sides = "left",
+      color = "black",
+      weight = px(2)
+    ),
+    locations = cells_body(columns = c(9, 13))
+  ) |> 
+  tab_style(
+    style = cell_text(weight = "bold"),
+    locations = cells_column_labels()
+  ) |> 
+  tab_options(
+    table.font.size = 13,
+    heading.align = "left",
+    footnotes.font.size = 11
+  ) |> 
+  opt_interactive(page_size_default = 20)
+```
+
+```{r}
+ranked_df |> 
+  filter(grade_cluster == 'E') |> 
+  ggplot(aes(x = school_year, y = desc(rank), group = school_name, color = school_name)) +
+  geom_bump() +
+  geom_point(size = 7) +
+  theme_minimal() +
+  theme(panel.grid.major = element_blank())
+  
+```
