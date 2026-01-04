@@ -1,6 +1,8 @@
 ---
 title: "Reading Readiness"
-format: html
+format: 
+  html:
+    mainfont: sans-serif
 editor: visual
 execute:
   echo: false
@@ -21,7 +23,8 @@ library(shiny)
 df <- read_rds("CCRPI_data.rds")
 
 school_list <- df |>
-  filter(grade_cluster == 'E') |> 
+  filter(grade_cluster == 'E',
+         school_name != 'All Schools') |> 
   select(school_name) |> 
   distinct() |> 
   arrange(school_name) |> 
@@ -43,6 +46,9 @@ avg_ranks <- ranked_df |>
   group_by(school_name) |> 
   summarise(mean_rank = mean(rank), sd_rank = sd(rank,na.rm = TRUE))
 ```
+
+> “You will learn most things by looking, but reading gives understanding. Reading will make you free.” ― Paul Rand
+
 
 ```{r}
 #| column: screen-inset
@@ -187,9 +193,10 @@ ranked_df |>
     locations = cells_column_labels()
   ) |> 
   tab_options(
-    table.font.size = 13,
+    table.font.size = 14,
     heading.align = "left",
-    footnotes.font.size = 11
+    footnotes.font.size = 12,
+    table.font.names = "sans"
   ) |> 
   cols_label(school_name = 'School',
              change_1yr = '1 Year Change',
@@ -202,24 +209,32 @@ ranked_df |>
 ```
 
 
-
 ## School Profile
 
-::: {.screen-inset-shaded}
+```{css}
+#rank_plot {
+  border: none !important;
+  box-shadow: none !important;
+}
+```
+
 
 ```{r}
 #| column: screen-inset-shaded
-selectInput("school", choices = school_list, label = 'Select a School:')
-
-plotOutput('rank_plot',width = '800px',height = '400px')
+div(
+  class = "screen-inset-shaded",
+  selectInput("school", choices = school_list, label = 'Select a School:'),
+  br(),
+  div(
+    style = "border: none;",
+    plotOutput('rank_plot', width = '100%', height = '500px')
+  )
+)
 ```
 
-:::
 
 ```{r}
 #| context: server
-#| fig-width: 12
-#| fig-height: 9
 
 library(tidyverse)
 library(gt)
@@ -228,6 +243,9 @@ library(ggbump)
 library(shiny)
 
 df <- read_rds("CCRPI_data.rds")
+
+plot_bg_color <- '#F8F9FA'
+plot_bg_color <- 'white'
 
 output$rank_plot <- renderPlot({
 
@@ -253,7 +271,7 @@ ranked_df_shiny |>
     data = \(x) filter(x, selected == 'N'),
     color = 'gray80',
     alpha = 0.3,
-    size = 3
+    size = 1.5
   ) +  
   geom_bump(
     data = \(x) filter(x, selected == 'Y'),
@@ -263,28 +281,39 @@ ranked_df_shiny |>
   geom_point(
     data = \(x) filter(x, selected == 'Y'),
     color = "deepskyblue4",
-    size = 7
+    size = 4
   ) +
   geom_text(
     data = \(x) filter(x, selected == 'Y'),
     aes(label = rank),
     color = 'white',
-    size = 3
+    size = 2,
+    fontface = 'bold'
   ) +
   scale_x_discrete(expand = c(0, .4)) +
   theme_minimal() +
   labs(x = NULL,
-       y = NULL) +
+       y = NULL,
+       title = paste0(input$school," Reading Readiness Scores Ranking From 2018 to 2025"),
+       subtitle = 'Rankings are in comparison to all other Elementary Schools in Coweta County') +
   theme(
+    text = element_text(family = "sans"),
     legend.position = 'none',
-    axis.text = element_text(face = 'bold'),
-    axis.title.y = element_text(size = 10),
-    plot.title = element_text(face = 'bold', color = 'black', size = 14),
+    axis.text = element_text(face = 'bold', size = 7),
+    plot.title = ggtext::element_textbox_simple(face = 'bold', color = 'black', size = 9),
+    plot.subtitle = ggtext::element_textbox_simple(size = 6),
     plot.title.position = 'plot',
-    panel.grid = element_blank()
+    panel.grid = element_blank(),
+    # plot.background = element_rect(fill = plot_bg_color),
+    # panel.background = element_rect(fill = plot_bg_color),
+    # panel.border = element_rect(color = plot_bg_color),     
+    axis.line = element_blank(),        
+    axis.text.y = element_blank(),      
+    axis.ticks.y = element_blank(),      
+    axis.title.y = element_blank()
   )
 
-})
+}, width = 700, height = 500, res = 150)
 
 ```
 
