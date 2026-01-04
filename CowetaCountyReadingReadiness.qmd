@@ -10,6 +10,8 @@ server: shiny
 ---
 
 ```{r}
+#| context: data 
+
 library(tidyverse)
 library(gt)
 library(gtExtras)
@@ -17,6 +19,13 @@ library(ggbump)
 library(shiny)
 
 df <- read_rds("CCRPI_data.rds")
+
+school_list <- df |>
+  filter(grade_cluster == 'E') |> 
+  select(school_name) |> 
+  distinct() |> 
+  arrange(school_name) |> 
+  pull()
 
 palette = scico::scico(n = 100, palette = "vik",direction =-1)
 palette_rev = scico::scico(n = 100, palette = "vik",direction = 1)
@@ -192,17 +201,91 @@ ranked_df |>
   opt_interactive(page_size_default = 20)
 ```
 
+
+
+## School Profile
+
+::: {.screen-inset-shaded}
+
 ```{r}
-ranked_df |> 
-  filter(grade_cluster == 'E') |> 
-  ggplot(aes(x = school_year, y = desc(rank), group = school_name, color = school_name)) +
-  geom_bump() +
-  geom_point(size = 7) +
-  theme_minimal() +
-  theme(panel.grid.major = element_blank())
-  
+#| column: screen-inset-shaded
+selectInput("school", choices = school_list, label = 'Select a School:')
+
+plotOutput('rank_plot',width = '800px',height = '400px')
 ```
+
+:::
 
 ```{r}
 #| context: server
+#| fig-width: 12
+#| fig-height: 9
+
+library(tidyverse)
+library(gt)
+library(gtExtras)
+library(ggbump)
+library(shiny)
+
+df <- read_rds("CCRPI_data.rds")
+
+output$rank_plot <- renderPlot({
+
+ranked_df_shiny <- df |>
+  filter(reporting_label == 'ALL Students',
+         school_name != 'All Schools') |>
+  select(school_year,school_name,grade_cluster,indicator_score) |>
+  group_by(school_year,grade_cluster) |>
+  mutate(rank = dense_rank(desc(indicator_score))) |>
+  arrange(school_year,rank) |>
+  filter(grade_cluster == 'E') |> 
+  mutate(selected = ifelse(school_name == input$school, 'Y', 'N')) 
+
+ranked_df_shiny |> 
+  ggplot(aes(x = school_year, y = desc(rank), group = school_name, color = school_name)) +
+  geom_bump(
+    data = \(x) filter(x, selected == 'N'),
+    color = 'gray80',
+    alpha = 0.3,
+    linewidth = 1
+  ) +
+  geom_point(
+    data = \(x) filter(x, selected == 'N'),
+    color = 'gray80',
+    alpha = 0.3,
+    size = 3
+  ) +  
+  geom_bump(
+    data = \(x) filter(x, selected == 'Y'),
+    color = "deepskyblue4",
+    linewidth = 1
+  ) +
+  geom_point(
+    data = \(x) filter(x, selected == 'Y'),
+    color = "deepskyblue4",
+    size = 7
+  ) +
+  geom_text(
+    data = \(x) filter(x, selected == 'Y'),
+    aes(label = rank),
+    color = 'white',
+    size = 3
+  ) +
+  scale_x_discrete(expand = c(0, .4)) +
+  theme_minimal() +
+  labs(x = NULL,
+       y = NULL) +
+  theme(
+    legend.position = 'none',
+    axis.text = element_text(face = 'bold'),
+    axis.title.y = element_text(size = 10),
+    plot.title = element_text(face = 'bold', color = 'black', size = 14),
+    plot.title.position = 'plot',
+    panel.grid = element_blank()
+  )
+
+})
+
 ```
+
+
