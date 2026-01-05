@@ -20,6 +20,7 @@ library(gtExtras)
 library(ggbump)
 library(shiny)
 library(plotly)
+library(bslib)
 
 df <- read_rds("CCRPI_data.rds")
 
@@ -49,6 +50,46 @@ avg_ranks <- ranked_df |>
 ```
 
 > “You will learn most things by looking, but reading gives understanding. Reading will make you free.” ― Paul Rand
+
+
+```{r}
+#| fig-width: 9
+#| fig-height: 4
+overall_plot <- df |> 
+  filter(school_name == 'All Schools', reporting_label == 'ALL Students', grade_cluster == 'E') |> 
+  select(school_year, indicator_score) |> 
+  mutate(
+    indicator_score = as.numeric(indicator_score)/100,
+    tooltip_text = paste0(
+      'Year: ',school_year, "\nReading Readiness Proportion: ",
+      scales::percent(indicator_score, accuracy = 0.1)
+    )
+  ) |> 
+  ggplot(aes(x = school_year, y = indicator_score, group = 1, text = tooltip_text)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 3) +
+  scale_y_continuous(label = scales::percent_format(accuracy = 1)) +
+  labs(x = NULL,
+       title = 'Reading Readiness Scores Across All Coweta County Elementary Schools') +
+  theme_minimal() +
+  theme(
+    text = element_text(family = "sans"),
+    legend.position = 'top',
+    legend.text = element_text(size = 6),
+    axis.text = element_text(face = 'bold', size = 11, color = 'black'),
+    plot.title = ggtext::element_textbox_simple(face = 'bold', color = 'black', size = 15),
+    plot.title.position = 'plot',
+    axis.line = element_blank(),        
+    axis.ticks.y = element_blank(),      
+    axis.title.y = element_blank(),
+    panel.grid.minor = element_blank()
+  )
+  
+ggplotly(overall_plot, tooltip = "text") |> 
+  config(displayModeBar = FALSE)
+```
+
+
 
 
 ```{r}
@@ -108,8 +149,7 @@ ranked_df |>
     locations = cells_column_spanners(spanners = "rankings")
   ) |> 
   cols_width(
-    1 ~ px(280),
-    2:14 ~ px(89)
+    1 ~ px(280)
   ) |> 
   cols_align(columns = 2:14, align = 'center') |> 
   fmt_percent(2:8) |> 
@@ -196,7 +236,7 @@ ranked_df |>
   tab_options(
     table.font.size = 14,
     heading.align = "left",
-    footnotes.font.size = 12,
+    footnotes.font.size = 13,
     table.font.names = "sans"
   ) |> 
   cols_label(school_name = 'School',
@@ -222,16 +262,14 @@ ranked_df |>
 
 ```{r}
 #| column: screen-inset-shaded
-library(bslib)
-
 div(
   class = "screen-inset-shaded",
   selectInput("school", choices = school_list, label = 'Select a School:'),
   br(),
   layout_columns(
     col_widths = c(6, 6),
-    plotOutput('rank_plot', width = '100%', height = '500px'),
-    plotOutput('county_plot', width = '100%', height = '500px')
+    plotlyOutput('rank_plot', width = '100%', height = '500px'),
+    plotlyOutput('county_plot', width = '100%', height = '500px')
   )
 )
 ```
@@ -245,26 +283,37 @@ library(gt)
 library(gtExtras)
 library(ggbump)
 library(shiny)
+library(bslib)
+library(plotly)
 
 df <- read_rds("CCRPI_data.rds")
 
 plot_bg_color <- '#F8F9FA'
 plot_bg_color <- 'white'
 
-output$rank_plot <- renderPlot({
+output$rank_plot <- renderPlotly({
 
 ranked_df_shiny <- df |>
   filter(reporting_label == 'ALL Students',
          school_name != 'All Schools') |>
-  select(school_year,school_name,grade_cluster,indicator_score) |>
-  group_by(school_year,grade_cluster) |>
+  select(school_year, school_name, grade_cluster, indicator_score) |>
+  group_by(school_year, grade_cluster) |>
   mutate(rank = dense_rank(desc(indicator_score))) |>
-  arrange(school_year,rank) |>
+  arrange(school_year, rank) |>
   filter(grade_cluster == 'E') |> 
-  mutate(selected = ifelse(school_name == input$school, 'Y', 'N')) 
+  mutate(
+    selected = ifelse(school_name == input$school, 'Y', 'N'),
+    tooltip_text = paste0(
+    school_name, "\n",
+    "Rank: ", rank, " of 19\n",
+    "Score: ", scales::percent(as.numeric(indicator_score)/100, accuracy = 0.1), "\n",
+    school_year
+    )
+  )
 
-ranked_df_shiny |> 
-  ggplot(aes(x = school_year, y = desc(rank), group = school_name, color = school_name)) +
+ranked_plot <- ranked_df_shiny |> 
+  ggplot(aes(x = school_year, y = desc(rank), group = school_name, 
+             color = school_name, text = tooltip_text)) +
   geom_bump(
     data = \(x) filter(x, selected == 'N'),
     color = 'gray80',
@@ -275,7 +324,7 @@ ranked_df_shiny |>
     data = \(x) filter(x, selected == 'N'),
     color = 'gray80',
     alpha = 0.3,
-    size = 1.5
+    size = 3
   ) +  
   geom_bump(
     data = \(x) filter(x, selected == 'Y'),
@@ -285,137 +334,89 @@ ranked_df_shiny |>
   geom_point(
     data = \(x) filter(x, selected == 'Y'),
     color = "deepskyblue4",
-    size = 4
+    size = 6
   ) +
   geom_text(
     data = \(x) filter(x, selected == 'Y'),
     aes(label = rank),
     color = 'white',
-    size = 2,
+    size = 3.5,
     fontface = 'bold'
   ) +
   scale_x_discrete(expand = c(0, .4)) +
   theme_minimal() +
   labs(x = NULL,
        y = NULL,
-       title = paste0(input$school," Reading Readiness Scores Ranking From 2018 to 2025"),
+       title = paste0(input$school, " Reading Readiness Scores Ranking from 2018 to 2025"),
        subtitle = 'Rankings are in comparison to all other Elementary Schools in Coweta County') +
   theme(
     text = element_text(family = "sans"),
     legend.position = 'none',
-    axis.text = element_text(face = 'bold', size = 7),
-    plot.title = ggtext::element_textbox_simple(face = 'bold', color = 'black', size = 9),
+    axis.text = element_text(face = 'bold', size = 11),
+    plot.title = ggtext::element_textbox_simple(face = 'bold', color = 'black', size = 15),
     plot.subtitle = ggtext::element_textbox_simple(size = 6),
     plot.title.position = 'plot',
     panel.grid = element_blank(),
-    # plot.background = element_rect(fill = plot_bg_color),
-    # panel.background = element_rect(fill = plot_bg_color),
-    # panel.border = element_rect(color = plot_bg_color),     
     axis.line = element_blank(),        
     axis.text.y = element_blank(),      
     axis.ticks.y = element_blank(),      
     axis.title.y = element_blank()
   )
 
-}, width = 700, height = 500, res = 150)
+ggplotly(ranked_plot, tooltip = "text") |> 
+  config(displayModeBar = FALSE)
+
+})
 
 
-output$county_plot <- renderPlot({
+output$county_plot <- renderPlotly({
   
-  df |> 
-  filter(school_name %in% c('All Schools',input$school),
+county_plot <- df |> 
+  filter(school_name %in% c('All Schools', input$school),
          grade_cluster == 'E',
          reporting_label == 'ALL Students') |> 
-  mutate(school_name = ifelse(school_name == 'All Schools','Coweta County Elementary Schools Average',school_name)) |> 
+  mutate(school_name = ifelse(school_name == 'All Schools',
+                               'Coweta County Elementary Schools Average',
+                               school_name)) |> 
   select(school_year, school_name, reporting_label, indicator_score) |> 
   mutate(indicator_score = as.numeric(indicator_score)/100) |> 
   filter(!is.na(indicator_score)) |> 
-  ggplot(aes(x = school_year, y = indicator_score, color = school_name)) +
-  geom_line(aes(group = school_year), color = "gray30", linewidth = 1) +
-  geom_point(size = 5) +
+  ggplot(aes(x = school_year, 
+             y = indicator_score, 
+             color = school_name, 
+             group = school_name, 
+             text = paste0(  
+               "<b>", school_name, "</b><br>",
+               "Year: ", school_year, "<br>",
+               "Score: ", scales::percent(indicator_score, accuracy = 0.1)
+             ))) +
+  geom_line(linewidth = .8) +
+  geom_point(size = 3) +
   scale_y_continuous(labels = scales::percent_format()) +
   theme_minimal() +
   labs(color = NULL,
-       x = NULL) +
+       x = NULL,
+       title = paste0('How do ', input$school, "'s Reading Readiness Scores Compare to all Elementary Schools in Coweta County?"),
+       subtitle = 'Chart shows school scores and overall scores by year.') +
   theme(
     text = element_text(family = "sans"),
     legend.position = 'top',
-    axis.text = element_text(face = 'bold', size = 10, color = 'black'),
-    plot.title = ggtext::element_textbox_simple(face = 'bold', color = 'black', size = 12),
+    axis.text = element_text(face = 'bold', size = 11),
+    plot.title = ggtext::element_textbox_simple(face = 'bold', color = 'black', size = 15),
     plot.subtitle = ggtext::element_textbox_simple(size = 6),
     plot.title.position = 'plot',
+    panel.grid = element_blank(),
     axis.line = element_blank(),        
+    axis.text.y = element_blank(),      
     axis.ticks.y = element_blank(),      
     axis.title.y = element_blank()
   )
   
-  
-  
+ggplotly(county_plot, tooltip = "text") |> 
+  config(displayModeBar = FALSE)
 })
 
 ```
 
-```{r}
-demographics_plot <- df |> 
-  filter(school_name %in% c('Atkinson Elementary School'),
-         grade_cluster == 'E') |> 
-  select(school_year, school_name, reporting_label, indicator_score) |> 
-  mutate(indicator_score = as.numeric(indicator_score)/100) |> 
-  filter(!is.na(indicator_score)) |> 
-  mutate(
-    tooltip_text = paste0(
-      'Year: ',school_year,"\n",
-      'Reporting Category: ',reporting_label, "\n",
-      paste('Reading Readiness: ',scales::percent(indicator_score, accuracy = 0.1)), "\n"
-    )
-  ) |> 
-  ggplot(aes(y = reporting_label, x = indicator_score, 
-             color = reporting_label, text = tooltip_text)) +
-  geom_point(size = 3.5) +
-  scale_x_continuous(labels = scales::percent_format()) +
-  theme_minimal() +
-  theme(
-    text = element_text(family = "sans"),
-    legend.position = 'none',
-    axis.text = element_text(face = 'bold', size = 10),
-    plot.title = ggtext::element_textbox_simple(face = 'bold', color = 'black', size = 12),
-    plot.subtitle = ggtext::element_textbox_simple(size = 6),
-    plot.title.position = 'plot',
-    axis.line = element_blank(),        
-    axis.ticks.y = element_blank(),      
-    axis.title.y = element_blank()
-  )
 
-ggplotly(demographics_plot, tooltip = "text")
-```
-
-```{r}
-df |> 
-  filter(school_name %in% c('All Schools','Atkinson Elementary School'),
-         grade_cluster == 'E',
-         reporting_label == 'ALL Students') |> 
-  mutate(school_name = ifelse(school_name == 'All Schools','Coweta County Elementary Schools Average',school_name)) |> 
-  select(school_year, school_name, reporting_label, indicator_score) |> 
-  mutate(indicator_score = as.numeric(indicator_score)/100) |> 
-  filter(!is.na(indicator_score)) |> 
-  ggplot(aes(x = school_year, y = indicator_score, color = school_name)) +
-  geom_line(aes(group = school_year), color = "gray30", linewidth = 1) +
-  geom_point(size = 5) +
-  scale_y_continuous(labels = scales::percent_format()) +
-  theme_minimal() +
-  labs(color = NULL,
-       x = NULL) +
-  theme(
-    text = element_text(family = "sans"),
-    legend.position = 'top',
-    axis.text = element_text(face = 'bold', size = 10, color = 'black'),
-    plot.title = ggtext::element_textbox_simple(face = 'bold', color = 'black', size = 12),
-    plot.subtitle = ggtext::element_textbox_simple(size = 6),
-    plot.title.position = 'plot',
-    axis.line = element_blank(),        
-    axis.ticks.y = element_blank(),      
-    axis.title.y = element_blank()
-  )
-
-```
 
