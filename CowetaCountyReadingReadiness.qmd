@@ -49,8 +49,13 @@ avg_ranks <- ranked_df |>
   summarise(mean_rank = mean(rank), sd_rank = sd(rank,na.rm = TRUE))
 ```
 
-> “You will learn most things by looking, but reading gives understanding. Reading will make you free.” ― Paul Rand
+::: callout-important
+## Work in Progress
 
+This analysis is still a work in progress.
+:::
+
+> “You will learn most things by looking, but reading gives understanding. Reading will make you free.” ― Paul Rand
 
 ```{r}
 #| fig-width: 9
@@ -88,9 +93,6 @@ overall_plot <- df |>
 ggplotly(overall_plot, tooltip = "text") |> 
   config(displayModeBar = FALSE)
 ```
-
-
-
 
 ```{r}
 #| column: screen-inset
@@ -249,7 +251,6 @@ ranked_df |>
   opt_interactive(page_size_default = 20)
 ```
 
-
 ## School Profile
 
 ```{css}
@@ -258,7 +259,6 @@ ranked_df |>
   box-shadow: none !important;
 }
 ```
-
 
 ```{r}
 #| column: screen-inset-shaded
@@ -273,7 +273,6 @@ div(
   )
 )
 ```
-
 
 ```{r}
 #| context: server
@@ -417,6 +416,3 @@ ggplotly(county_plot, tooltip = "text") |>
 })
 
 ```
-
-
-
